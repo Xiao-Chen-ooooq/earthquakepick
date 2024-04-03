@@ -1,0 +1,948 @@
+import json
+import h5py
+import numpy as np
+import matplotlib.pyplot as plt
+import obspy
+
+# key_list = np.random.choice(list(DiTing_natural_earthquake_json.keys()),11000)
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
+def _add_noise(datt, rate,sr):
+        'Randomly add Gaussian noie with a random SNR into waveforms'
+        
+        datasnoisy = np.empty((datt.shape))
+        if np.random.uniform(0, 1) < rate : 
+            datasnoisy = np.empty((datt.shape))
+            t=np.random.uniform(0.01, sr)
+            datasnoisy[:, 0] = datt[:,0] + np.random.normal(0, t*max(abs(datt[:,0])), datt.shape[0])
+            datasnoisy[:, 1] = datt[:,1] + np.random.normal(0, t*max(abs(datt[:,1])), datt.shape[0])
+            datasnoisy[:, 2] = datt[:,2] + np.random.normal(0, t*max(abs(datt[:,2])), datt.shape[0])   
+        else:
+            datasnoisy = datt
+        return datasnoisy
+def added_noise(dats,rate,sr):
+    datanoisy=np.empty((dats.shape))
+    for i in range(dats.shape[0]):
+        datanoisy[i]=_add_noise(dats[i],rate,sr)
+    return datanoisy
+v=0.4
+v1=1.7
+import numpy as np
+def _label(a=0, b=20, c=40): 
+        'Used for triangolar labeling'
+        
+        z = np.linspace(a, c, num = 2*(b-a)+1)
+        y = np.zeros(z.shape)
+        y[z <= a] = 0
+        y[z >= c] = 0
+        first_half = np.logical_and(a < z, z <= b)
+        y[first_half] = (z[first_half]-a) / (b-a)
+        second_half = np.logical_and(b < z, z < c)
+        y[second_half] = (c-z[second_half]) / (c-b)
+        return y
+def _normalizes( data,size, mode = 'max'):
+    'Normalize waveforms in each batch'
+    data_new=np.zeros((size,5984,3))
+    for i in range(size):
+        data_new[i,:,:]=data[i,:,:]/np.max(np.max(abs(data[i,:,:])))           
+    return data_new
+
+k=h5py.File("D:\\q\\chunk1.hdf5")
+Xn=[]
+
+count=0
+_,l=train_test_split(list(k['data']),test_size=0.1,random_state=1)
+nums2=len(l)
+yn=np.zeros((nums2,5984))
+# l=np.random.choice(k['data'],nums2)
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    Xn.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+#     count+=1
+#     if count>=11000:
+#         break
+Xn=np.array(Xn)
+Xn=_normalizes(Xn,nums2)
+k=h5py.File("C:\\Users\\a\\chunk5.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.08*v,random_state=1)
+nums2=len(l)
+X5=[]
+lab_p=[]
+lab_s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab_p.append(sp)
+        lab_s.append(ss)
+        X5.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X5=np.array(X5)
+lab_p=np.array(lab_p)
+lab_s=np.array(lab_s)
+p5=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p5[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p5[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p5[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+s5=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s5[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s5[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s5[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+X5=_normalizes(X5,nums2)
+k=h5py.File("C:\\Users\\a\\chunk4.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.07*v,random_state=1)
+nums2=len(l)
+X4=[]
+lab_p=[]
+lab_s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab_p.append(sp)
+        lab_s.append(ss)
+        X4.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X4=np.array(X4)
+lab_p=np.array(lab_p)
+lab_s=np.array(lab_s)
+p4=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p4[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p4[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p4[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+s4=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s4[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s4[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s4[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+X4=_normalizes(X4,nums2)
+k=h5py.File("C:\\Users\\a\\chunk3.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.08*v,random_state=1)
+nums2=len(l)
+X3=[]
+lab_p=[]
+lab_s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab_p.append(sp)
+        lab_s.append(ss)
+        X3.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X3=np.array(X3)
+lab_p=np.array(lab_p)
+lab_s=np.array(lab_s)
+p3=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p3[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p3[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p3[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+s3=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s3[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s3[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s3[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+X3=_normalizes(X3,nums2)
+k=h5py.File("C:\\Users\\a\\chunk2.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.1*v,random_state=1)
+nums2=len(l)
+# l=np.random.choice(k['data'],nums2)
+X2=[]
+lab2p=[]
+lab2s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab2p.append(sp)
+        lab2s.append(ss)
+        X2.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X2=np.array(X2)
+lab2p=np.array(lab2p)
+lab2s=np.array(lab2s)
+p2=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab2p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p2[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p2[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p2[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+w2=np.zeros((nums2,5984))
+for i in range(nums2):
+    pt=int(lab2p[i])
+    st=int(lab2s[i])
+    d=st-pt
+    if int(st+d*0.4)>=5984:
+        w2[i,pt:]=1
+    else:
+        w2[i,pt:int(st+d*0.4)]=1
+s2=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab2s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s2[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s2[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s2[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+
+X2=_normalizes(X2,nums2)
+k=h5py.File("C:\\Users\\a\\chunk6.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.1*v,random_state=1)
+nums2=len(l)
+# l=np.random.choice(k['data'],nums2)
+X6=[]
+lab6p=[]
+lab6s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab6p.append(sp)
+        lab6s.append(ss)
+        X6.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X6=np.array(X6)
+lab6p=np.array(lab6p)
+lab6s=np.array(lab6s)
+p6=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab6p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p6[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p6[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p6[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+w6=np.zeros((nums2,5984))
+for i in range(nums2):
+    pt=int(lab6p[i])
+    st=int(lab6s[i])
+    d=st-pt
+    if int(st+d*0.4)>=5984:
+        w6[i,pt:]=1
+    else:
+        w6[i,pt:int(st+d*0.4)]=1
+s6=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab6s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s6[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s6[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s6[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+
+X6=_normalizes(X6,nums2)
+# X0=_normalizes(X0,nums0)
+t0=obspy.Trace()
+t1=obspy.Trace()
+t2=obspy.Trace()
+for a in range(len(X2)):
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        ad=added_noise(X2[a:a+1,:,:],1,0.01)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X2[a,:,0]=t0.data
+        X2[a,:,1]=t1.data
+        X2[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        ad=added_noise(X2[a:a+1,:,:],1,0.04)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X2[a,:,0]=t0.data
+        X2[a,:,1]=t1.data
+        X2[a,:,2]=t2.data
+    else:
+        t0.data=X2[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X2[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X2[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X2[a,:,0]=t0.data
+        X2[a,:,1]=t1.data
+        X2[a,:,2]=t2.data
+for a in range(len(X3)):
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        ad=added_noise(X3[a:a+1,:,:],1,0.01)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X3[a,:,0]=t0.data
+        X3[a,:,1]=t1.data
+        X3[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        ad=added_noise(X3[a:a+1,:,:],1,0.04)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X3[a,:,0]=t0.data
+        X3[a,:,1]=t1.data
+        X3[a,:,2]=t2.data
+    else:
+        t0.data=X3[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X3[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X3[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X3[a,:,0]=t0.data
+        X3[a,:,1]=t1.data
+        X3[a,:,2]=t2.data
+for a in range(len(X4)):
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        ad=added_noise(X4[a:a+1,:,:],1,0.01)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X4[a,:,0]=t0.data
+        X4[a,:,1]=t1.data
+        X4[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        ad=added_noise(X4[a:a+1,:,:],1,0.04)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X4[a,:,0]=t0.data
+        X4[a,:,1]=t1.data
+        X4[a,:,2]=t2.data
+    else:
+        t0.data=X4[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X4[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X4[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X4[a,:,0]=t0.data
+        X4[a,:,1]=t1.data
+        X4[a,:,2]=t2.data
+for a in range(len(X5)):
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        ad=added_noise(X5[a:a+1,:,:],1,0.01)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X5[a,:,0]=t0.data
+        X5[a,:,1]=t1.data
+        X5[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        ad=added_noise(X5[a:a+1,:,:],1,0.04)
+        t0.data=ad[0,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=ad[0,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=ad[0,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X5[a,:,0]=t0.data
+        X5[a,:,1]=t1.data
+        X5[a,:,2]=t2.data
+    else:
+        t0.data=X5[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X5[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X5[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X5[a,:,0]=t0.data
+        X5[a,:,1]=t1.data
+        X5[a,:,2]=t2.data
+X2=X2.astype(np.float32)
+X3=X3.astype(np.float32)
+X4=X4.astype(np.float32)
+X5=X5.astype(np.float32)
+X6=X6.astype(np.float32)
+s2=s2.astype(np.float32)
+s3=s3.astype(np.float32)
+s4=s4.astype(np.float32)
+s5=s5.astype(np.float32)
+s6=s6.astype(np.float32)
+p2=p2.astype(np.float32)
+p3=p3.astype(np.float32)
+p4=p4.astype(np.float32)
+p6=p6.astype(np.float32)
+p5=p5.astype(np.float32)
+X2__=X2
+X6__=X6
+X5__=X5
+X4__=X4
+X3__=X3
+s2__=s2
+s5__=s5
+s3__=s3
+s4__=s4
+s6__=s6
+
+p2__=p2
+p3__=p3
+p4__=p4
+p6__=p6
+p5__=p5
+import obspy
+
+import numpy as np
+def _label(a=0, b=20, c=40): 
+        'Used for triangolar labeling'
+        
+        z = np.linspace(a, c, num = 2*(b-a)+1)
+        y = np.zeros(z.shape)
+        y[z <= a] = 0
+        y[z >= c] = 0
+        first_half = np.logical_and(a < z, z <= b)
+        y[first_half] = (z[first_half]-a) / (b-a)
+        second_half = np.logical_and(b < z, z < c)
+        y[second_half] = (c-z[second_half]) / (c-b)
+        return y
+def _normalizes( data,size, mode = 'max'):
+    'Normalize waveforms in each batch'
+    data_new=np.zeros((size,5984,3))
+    for i in range(size):
+        data_new[i,:,:]=data[i,:,:]/np.max(np.max(abs(data[i,:,:])))           
+    return data_new
+
+k=h5py.File("D:\\q\\chunk1.hdf5")
+XN=[]
+
+count=0
+_,l=train_test_split(list(k['data']),test_size=0.7,random_state=0)
+nums2=len(l)
+yN=np.zeros((nums2,5984))
+# l=np.random.choice(k['data'],nums2)
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    XN.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+#     count+=1
+#     if count>=11000:
+#         break
+XN=np.array(XN)
+XN=_normalizes(XN,nums2)
+k=h5py.File("C:\\Users\\a\\chunk5.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.08*v1,random_state=0)
+nums2=len(l)
+X5=[]
+lab_p=[]
+lab_s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab_p.append(sp)
+        lab_s.append(ss)
+        X5.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X5=np.array(X5)
+lab_p=np.array(lab_p)
+lab_s=np.array(lab_s)
+p5=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p5[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p5[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p5[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+w5=np.zeros((nums2,5984))
+for i in range(nums2):
+    pt=int(lab_p[i])
+    st=int(lab_s[i])
+    d=st-pt
+    if int(st+d*0.4)>=5984:
+        w5[i,pt:]=1
+    else:
+        w5[i,pt:int(st+d*0.4)]=1
+s5=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s5[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s5[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s5[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+X5=_normalizes(X5,nums2)
+k=h5py.File("C:\\Users\\a\\chunk4.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.08*v1,random_state=0)
+nums2=len(l)
+X4=[]
+lab_p=[]
+lab_s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab_p.append(sp)
+        lab_s.append(ss)
+        X4.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X4=np.array(X4)
+lab_p=np.array(lab_p)
+lab_s=np.array(lab_s)
+p4=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p4[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p4[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p4[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+w4=np.zeros((nums2,5984))
+for i in range(nums2):
+    pt=int(lab_p[i])
+    st=int(lab_s[i])
+    d=st-pt
+    if int(st+d*0.4)>=5984:
+        w4[i,pt:]=1
+    else:
+        w4[i,pt:int(st+d*0.4)]=1
+s4=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s4[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s4[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s4[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+X4=_normalizes(X4,nums2)
+k=h5py.File("C:\\Users\\a\\chunk3.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.08*v1,random_state=0)
+nums2=len(l)
+X3=[]
+lab_p=[]
+lab_s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab_p.append(sp)
+        lab_s.append(ss)
+        X3.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X3=np.array(X3)
+lab_p=np.array(lab_p)
+lab_s=np.array(lab_s)
+p3=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p3[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p3[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p3[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+s3=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab_s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s3[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s3[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s3[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+X3=_normalizes(X3,nums2)
+k=h5py.File("C:\\Users\\a\\chunk2.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.1*v1,random_state=0)
+nums2=len(l)
+# l=np.random.choice(k['data'],nums2)
+X2=[]
+lab2p=[]
+lab2s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab2p.append(sp)
+        lab2s.append(ss)
+        X2.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X2=np.array(X2)
+lab2p=np.array(lab2p)
+lab2s=np.array(lab2s)
+p2=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab2p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p2[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p2[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p2[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+w2=np.zeros((nums2,5984))
+for i in range(nums2):
+    pt=int(lab2p[i])
+    st=int(lab2s[i])
+    d=st-pt
+    if int(st+d*0.4)>=5984:
+        w2[i,pt:]=1
+    else:
+        w2[i,pt:int(st+d*0.4)]=1
+s2=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab2s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s2[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s2[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s2[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+X2=_normalizes(X2,nums2)
+k=h5py.File("C:\\Users\\a\\chunk6.hdf5")
+_,l=train_test_split(list(k['data']),test_size=0.1*v1,random_state=1)
+nums2=len(l)
+# l=np.random.choice(k['data'],nums2)
+X6=[]
+lab6p=[]
+lab6s=[]
+for name in tqdm(l):
+    datas=k['data'+'/'+name]
+    sp=int(k['data/'+name].attrs['p_arrival_sample'])
+    ss = int(k['data/'+name].attrs['s_arrival_sample'])
+    if sp<5984 and ss<5984:
+        lab6p.append(sp)
+        lab6s.append(ss)
+        X6.append(np.concatenate([datas[:5984,2:3],datas[:5984,1:2],datas[:5984,0:1]],axis=-1))
+X6=np.array(X6)
+lab6p=np.array(lab6p)
+lab6s=np.array(lab6s)
+p6=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab6p[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        p6[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        p6[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        p6[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+w6=np.zeros((nums2,5984))
+for i in range(nums2):
+    pt=int(lab6p[i])
+    st=int(lab6s[i])
+    d=st-pt
+    if int(st+d*0.4)>=5984:
+        w6[i,pt:]=1
+    else:
+        w6[i,pt:int(st+d*0.4)]=1
+s6=np.zeros((nums2,5984))
+dim=5984
+for i in range(nums2):
+    sst=int(lab6s[i])
+    if sst and (sst-20 >= 0) and (sst+21 < dim):
+        s6[i, sst-20:sst+21] = _label()                 
+    elif sst and (sst+21 < dim):
+        s6[i, 0:sst+sst+1] = _label(a=0, b=sst, c=2*sst)                  
+    elif sst and (sst-20 >= 0):
+        sdif = dim - sst
+        s6[i, sst-sdif-1:dim] = _label(a=sst-sdif, b=sst, c=2*sdif)
+
+X6=_normalizes(X6,nums2)
+t0=obspy.Trace()
+t1=obspy.Trace()
+t2=obspy.Trace()
+q=0
+for a in range(len(X2)):
+    w=q+a
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        size=np.random.uniform(0,0.1)
+        t0.data=X2[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X2[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X2[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X2[a,:,0]=t0.data
+        X2[a,:,1]=t1.data
+        X2[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        size=np.random.uniform(0,0.4)
+        t0.data=X2[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X2[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X2[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X2[a,:,0]=t0.data
+        X2[a,:,1]=t1.data
+        X2[a,:,2]=t2.data
+    else:
+        t0.data=X2[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X2[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X2[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X2[a,:,0]=t0.data
+        X2[a,:,1]=t1.data
+        X2[a,:,2]=t2.data
+
+q=q+len(X2)
+for a in range(len(X3)):
+    w=q+a
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        size=np.random.uniform(0,0.1)
+        t0.data=X3[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X3[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X3[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X3[a,:,0]=t0.data
+        X3[a,:,1]=t1.data
+        X3[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        size=np.random.uniform(0,0.4)
+        t0.data=X3[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X3[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X3[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X3[a,:,0]=t0.data
+        X3[a,:,1]=t1.data
+        X3[a,:,2]=t2.data
+    else:
+        t0.data=X3[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X3[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X3[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X3[a,:,0]=t0.data
+        X3[a,:,1]=t1.data
+        X3[a,:,2]=t2.data
+
+q=q+len(X3)
+for a in range(len(X4)):
+    w=q+a
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        size=np.random.uniform(0,0.1)
+        t0.data=X4[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X4[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X4[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X4[a,:,0]=t0.data
+        X4[a,:,1]=t1.data
+        X4[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        size=np.random.uniform(0,0.4)
+        t0.data=X4[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X4[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X4[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X4[a,:,0]=t0.data
+        X4[a,:,1]=t1.data
+        X4[a,:,2]=t2.data
+    else:
+        t0.data=X4[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X4[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X4[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X4[a,:,0]=t0.data
+        X4[a,:,1]=t1.data
+        X4[a,:,2]=t2.data
+
+q=q+len(X4)
+for a in range(len(X6)):
+    w=q+a
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        size=np.random.uniform(0,0.1)
+        t0.data=X6[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X6[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X6[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X6[a,:,0]=t0.data
+        X6[a,:,1]=t1.data
+        X6[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.7:
+        size=np.random.uniform(0,0.4)
+        t0.data=X6[a,:,0]+size*XN[w,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X6[a,:,1]+size*XN[w,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X6[a,:,2]+size*XN[w,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X6[a,:,0]=t0.data
+        X6[a,:,1]=t1.data
+        X6[a,:,2]=t2.data
+    else:
+        t0.data=X6[a,:,0]
+        t0.filter('bandpass',freqmin=0.1,freqmax=10)
+        t1.data=X6[a,:,1]
+        t1.filter('bandpass',freqmin=0.1,freqmax=10)
+        t2.data=X6[a,:,2]
+        t2.filter('bandpass',freqmin=0.1,freqmax=10)
+        X6[a,:,0]=t0.data
+        X6[a,:,1]=t1.data
+        X6[a,:,2]=t2.data
+q=q+len(X6)
+for a in range(len(X5)):
+    w=q+a
+    proba=np.random.uniform(0,1)
+    if proba<0.1:
+        if np.random.uniform(0,1)<0.3:
+            X5[a,:,:]=X5[a,:,:]+np.random.uniform(0,0.1)*XN[w,:,:]
+        else:
+            size=np.random.uniform(0,0.1)
+            t0.data=X5[a,:,0]+size*XN[w,:,0]
+            t0.filter('bandpass',freqmin=0.1,freqmax=10)
+            t1.data=X5[a,:,1]+size*XN[w,:,1]
+            t1.filter('bandpass',freqmin=0.1,freqmax=10)
+            t2.data=X5[a,:,2]+size*XN[w,:,2]
+            t2.filter('bandpass',freqmin=0.1,freqmax=10)
+            X5[a,:,0]=t0.data
+            X5[a,:,1]=t1.data
+            X5[a,:,2]=t2.data
+    elif proba>=0.1 and proba<0.75:
+        if np.random.uniform(0,1)<0.3:
+            X5[a,:,:]=X5[a,:,:]+np.random.uniform(0,1)*XN[w,:,:]
+        else:
+            size=np.random.uniform(0,1)
+            t0.data=X5[a,:,0]+size*XN[w,:,0]
+            t0.filter('bandpass',freqmin=0.1,freqmax=10)
+            t1.data=X5[a,:,1]+size*XN[w,:,1]
+            t1.filter('bandpass',freqmin=0.1,freqmax=10)
+            t2.data=X5[a,:,2]+size*XN[w,:,2]
+            t2.filter('bandpass',freqmin=0.1,freqmax=10)
+            X5[a,:,0]=t0.data
+            X5[a,:,1]=t1.data
+            X5[a,:,2]=t2.data
+X2=X2.astype(np.float32)
+X3=X3.astype(np.float32)
+X4=X4.astype(np.float32)
+X5=X5.astype(np.float32)
+X6=X6.astype(np.float32)
+s2=s2.astype(np.float32)
+s3=s3.astype(np.float32)
+s4=s4.astype(np.float32)
+s5=s5.astype(np.float32)
+s6=s6.astype(np.float32)
+p2=p2.astype(np.float32)
+p3=p3.astype(np.float32)
+p4=p4.astype(np.float32)
+p6=p6.astype(np.float32)
+p5=p5.astype(np.float32)
+Xn=Xn.astype(np.float32)
+yn=yn.astype(np.float32)
+X=np.concatenate([X4,X4__,X2,X2__,X3,X3__,X6,X6__,X5,X5__,Xn],axis=0)
+y=np.concatenate([p4,p4__,p2,p2__,p3,p3__,p6__,p6,p5,p5__,yn],axis=0)
+X4=0
+X4__=0
+X2=0
+X2__=0
+X3=0
+X3__=0
+X6=0
+X6__=0
+X5=0
+X5__=0
+Xn=0
+yn=0
