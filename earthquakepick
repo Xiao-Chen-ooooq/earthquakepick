@@ -1,0 +1,117 @@
+import os
+from obspy.core import UTCDateTime
+from tensorflow.keras.models import load_model
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+
+tf.config.experimental.set_visible_devices(devices=gpus[0], device_type='GPU')
+modek=load_model(r'C:\Users\a\weights-0-38-0.00588.hdf5')
+modes=load_model(r'C:\Users\a\weights-0-92-0.00731.hdf5')
+import numpy as np
+def _normalizes( data,size, mode = 'max'):
+    'Normalize waveforms in each batch'
+    data_new=np.zeros((size,5984,3))
+    for i in range(size):
+        data_new[i,:,:]=data[i,:,:]/np.max(np.max(abs(data[i,:,:])))           
+    return data_new
+import obspy
+import dateutil.parser
+import pytz
+import time
+from datetime import datetime
+import pandas as pd
+def converttime(dt):
+    dt=str(dt)
+    local=dateutil.parser.parse(dt)
+    dt = datetime.strftime(local, '%Y-%m-%d %H:%M:%S.%f')
+    return dt
+# modeq=load_model(r'C:\Users\a\weights-0-112-0.04509.hdf5')
+# f=os.listdir(r'E:\SS')
+f=open(r'D:\f.txt')
+couns=0
+for f1 in f.readlines():
+    f1=f1[:-1]
+    f2=os.listdir(r'D:\0'+'\\'+f1)
+    detec=[]
+    f0=[q.split('_')[2].split('.')[0] for q in f2]
+    f0=list(set(f0))
+    f0.sort()
+    for fa in f0:
+        try:
+            r0=obspy.read(r'D:\0'+'\\'+f1+'\\'+f1+'_Z_'+fa+'.sac')
+            r0=r0[0]
+            r1=obspy.read(r'D:\0'+'\\'+f1+'\\'+f1+'_N_'+fa+'.sac')
+            r1=r1[0]
+            r2=obspy.read(r'D:\0'+'\\'+f1+'\\'+f1+'_E_'+fa+'.sac')
+            r2=r2[0]
+        except:
+            continue
+        r0.decimate(factor=10, strict_length=False)
+        r1.decimate(factor=10, strict_length=False)
+        r2.decimate(factor=10, strict_length=False)
+        r0.filter('bandpass',freqmin=0.1,freqmax=10)
+        r1.filter('bandpass',freqmin=0.1,freqmax=10)
+        r2.filter('bandpass',freqmin=0.1,freqmax=10)
+        v=1
+        X=[]
+        for j in range(int(len(r0.data)/5984)*4):
+            if (j*1501+5984<len(r0.data)) and (j*1501+5984<len(r1.data)) and (j*1501+5984<len(r2.data)):
+                q=np.concatenate([r0.data[j*1501:j*1501+5984].reshape(5984,1),r1.data[j*1501:j*1501+5984].reshape(5984,1),r2.data[j*1501:j*1501+5984].reshape(5984,1)],axis=-1)
+                X.append(q)
+        X=np.array(X)
+        X=_normalizes(X,len(X))
+        if len(X)==0:
+            continue
+        w=modek.predict(X)
+        a=modes.predict(X)
+        for i in range(len(X)):
+            if np.max(w[i,:,0])>0.05 and  np.max(a[i,:,0])>0.05:
+                    de={}
+                    pp=UTCDateTime(r0.stats.starttime)+(i*1501+np.where(w[i,:,0]==np.max(w[i,:,0]))[0][0])/(r0.stats.sampling_rate)
+                    ss=UTCDateTime(r0.stats.starttime)+(i*1501+np.where(a[i,:,0]==np.max(a[i,:,0]))[0][0])/(r0.stats.sampling_rate)
+                    if ss-pp<20 and ss-pp>0:
+                        de['p']=pp
+                        de['s']=ss
+                        de['p_probability']=np.max(w[i,:,0])
+                        de['s_probability']=np.max(a[i,:,0])
+                        de['er']=(np.where(w[i,:,0]==np.max(w[i,:,0]))[0][0]+np.where(a[i,:,0]==np.max(a[i,:,0]))[0][0])/2
+                        de['filesnames']=fa
+                        de['ek']=UTCDateTime(r0.stats.starttime)+(i*1501+de['er'])/(r0.stats.sampling_rate)
+                        detec.append(de)
+            
+    numes=[]
+    for i in range(len(detec)):
+        if i>1:
+            if abs(UTCDateTime(detec[i-1]['ek'])-UTCDateTime(detec[i]['ek']))<20:
+                if abs(detec[i-1]['er']-1400)<abs(detec[i]['er']-1400):
+                    numes.append(i)
+                else:
+                    numes.append(i-1)
+    count=0
+    for k in numes:
+        del detec[k-count]
+        count+=1
+    if not os.path.exists(r'D:\outputa'+'\\'+f1):
+        os.mkdir(r'D:\outputa'+'\\'+f1)
+    pa=pd.DataFrame(data=np.zeros((len(detec),19)),columns=['file_name','network','station','instrument_type','station_lat','station_lon','station_elv','event_start_time','event_end_time','detection_probability','detection_uncertainty','p_arrival_time','p_probability','p_uncertainty','p_snr','s_arrival_time','s_probability','s_uncertainty','s_snr'])
+    for i in range(len(detec)):
+        pa['file_name'][i]=detec[i]['filesnames']
+        pa['network'][i]='BL'
+        pa['station'][i]=f1
+        pa['instrument_type'][i]='EH'
+        pa['station_lat'][i]=r0.stats.sac['stla']
+        pa['station_lon'][i]=r0.stats.sac['stlo']
+        pa['station_elv'][i]=r0.stats.sac['stel']
+        pa['event_start_time'][i]=converttime(UTCDateTime(detec[i]['p'])-2)
+        pa['event_end_time'][i]=converttime(UTCDateTime(detec[i]['p'])+7)
+        pa['detection_probability'][i]=1
+        pa['detection_uncertainty'][i]=0
+        pa['p_arrival_time'][i]=converttime(UTCDateTime(detec[i]['p']))
+        pa['p_probability'][i]=detec[i]['p_probability']
+        pa['p_uncertainty'][i]=0
+        pa['p_snr'][i]=10
+        pa['s_arrival_time'][i]=converttime(UTCDateTime(detec[i]['s']))
+        pa['s_probability'][i]=detec[i]['s_probability']
+        pa['s_uncertainty'][i]=0
+        pa['s_snr'][i]=10
+    pa.to_csv(r'D:\outputa'+'\\'+f1+'\\'+'X_prediction_results.csv')
