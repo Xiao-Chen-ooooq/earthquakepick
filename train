@@ -1,0 +1,182 @@
+import tensorflow as tf
+from tensorflow.keras import layers
+from tensorflow import keras
+import numpy as np
+from tensorflow.keras.models import Sequential
+from tensorflow.keras import Model
+from tensorflow.keras.layers import Conv1D
+from tensorflow.keras.layers import MaxPooling1D
+from tensorflow.keras.layers import Bidirectional
+from tensorflow.keras.layers import UpSampling1D 
+from tensorflow.keras.layers import Conv1DTranspose
+from tensorflow.keras.layers import Dense, Dropout,add,GlobalAveragePooling1D
+from tensorflow.keras.layers import GRU,LSTM,Dense,Attention,Reshape
+from tensorflow.keras import layers
+from tensorflow.keras.layers import Concatenate,LayerNormalization
+import tensorflow as tf
+import h5py
+from tensorflow.keras import layers
+from tensorflow.keras.layers import MultiHeadAttention,Dropout
+from tensorflow.keras.layers import Cropping1D
+from tensorflow.keras import backend as K
+from tensorflow.keras.optimizers import Adam
+gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+tf.config.experimental.set_visible_devices(devices=gpus[0], device_type='GPU')
+# gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+# tf.config.experimental.set_memory_growth(gpus[0], True)
+tf.config.experimental.set_virtual_device_configuration(gpus[0],[tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024*24)])
+import numpy as np
+def ca_block(inputts,inchannels):
+    inchannels=int(inchannels)
+    outputs=GlobalAveragePooling1D()(inputts)
+    outputs=Dense(inchannels*2,activation='relu')(outputs)
+    outputs=Dense(inchannels,activation='sigmoid')(outputs)
+    outputs=Reshape((1,inchannels))(outputs)
+    return add([inputts,inputts*outputs])
+def positional_encoding(length, depth):
+      depth = depth/2
+
+      positions = np.arange(length)[:, np.newaxis]     # (seq, 1)
+      depths = np.arange(depth)[np.newaxis, :]/depth   # (1, depth)
+        
+      angle_rates = 1 / (10000**depths)         # (1, depth)
+      angle_rads = positions * angle_rates      # (pos, depth)
+
+      pos_encoding = np.concatenate(
+          [np.sin(angle_rads), np.cos(angle_rads)],
+          axis=-1) 
+
+      return tf.cast(pos_encoding, dtype=tf.float32)
+inputs = tf.keras.Input(shape=(5984,3,))
+x=Conv1D(32,6,activation='relu',padding='same',input_shape=(5984,3))(inputs)
+c1=Conv1D(32,5,activation='relu',padding='same')(x)
+c1=ca_block(c1,32)
+# x=MaxPooling1D(pool_size=2,strides=2, padding='same')(c1)
+x=Conv1D(32,5,strides=2,padding='same',activation='relu')(c1)
+x=Conv1D(32,5,activation='relu',padding='same')(x)
+c2=Conv1D(32,5,activation='relu',padding='same')(x)
+c2=ca_block(c2,32)
+# x=MaxPooling1D(pool_size=2,strides=2, padding='same')(c2)
+x=Conv1D(46,5,strides=2,padding='same',activation='relu')(c2)
+x=Conv1D(46,4,activation='relu',padding='same')(x)
+c3=Conv1D(46,4,activation='relu',padding='same')(x)
+c3=ca_block(c3,46)
+# x=MaxPooling1D(pool_size=2,strides=2, padding='same')(c3)
+x=Conv1D(46,5,strides=2,padding='same',activation='relu')(c3)
+x=Conv1D(46,4,activation='relu',padding='same')(x)
+c4=Conv1D(46,4,activation='relu',padding='same')(x)
+c4=ca_block(c4,46)
+# x=MaxPooling1D(pool_size=2,strides=2, padding='same')(c4)
+x=Conv1D(64,5,strides=2,padding='same',activation='relu')(c4)
+x=Conv1D(64,3,activation='relu',padding='same')(x)
+c5=Conv1D(64,3,activation='relu',padding='same')(x)
+c5=ca_block(c5,64)
+# x=MaxPooling1D(pool_size=2,strides=2, padding='same')(c5)
+x=Conv1D(64,5,strides=2,padding='same',activation='relu')(c5)
+# x=Conv1D(64,3,activation='relu',padding='same')(x)
+# x=Conv1D(64,3,activation='relu',padding='same')(x)
+# x=MaxPooling1D(pool_size=2,strides=2, padding='same')(x)
+g1=Bidirectional(GRU(32, return_sequences=True))(x)
+g2=Bidirectional(LSTM(32, return_sequences=True))(g1)
+# D1=Dense(90,activation='tanh')(g2)
+# D2=Dense(64,activation='tanh')(D1)
+G1=add([x,g2])
+l1=Bidirectional(GRU(32, return_sequences=True))(G1)
+l2=Bidirectional(LSTM(32, return_sequences=True))(l1)
+# D3=Dense(90,activation='tanh')(l2)
+# D4=Dense(64,activation='tanh')(D3)
+Lq=add([l2,G1])
+# g1=Bidirectional(GRU(32, return_sequences=True))(x)
+# # g2=Bidirectional(GRU(32, return_sequences=True))(g1)
+# # l1=Bidirectional(LSTM(32, return_sequences=True))(g2)
+# l2=Bidirectional(LSTM(32, return_sequences=True))(g1)
+# D1=Dense(64,activation='tanh')(l2)
+# D2=Dense(64,activation='tanh')(D1)
+# L2=add([x,D2])
+# g3=Bidirectional(GRU(32, return_sequences=True))(L2)
+# # g4=Bidirectional(GRU(32, return_sequences=True))(g3)
+# # l3=Bidirectional(LSTM(32, return_sequences=True))(g4)
+# l4=Bidirectional(LSTM(32, return_sequences=True))(g3)
+# D3=Dense(64,activation='tanh')(l4)
+# D4=Dense(64,activation='tanh')(D3)
+# L3=add([D4,L2])
+# g5=Bidirectional(GRU(32, return_sequences=True))(L3)
+# # g0=Bidirectional(GRU(32, return_sequences=True))(g5)
+# # l5=Bidirectional(LSTM(32, return_sequences=True))(g0)
+# l0=Bidirectional(LSTM(32, return_sequences=True))(g5)
+# D5=Dense(64,activation='tanh')(l0)
+# D0=Dense(64,activation='tanh')(D5)
+# Lq=add([D0,L3])
+L1=Lq+positional_encoding(187,64)
+# print(L1.shape)
+q1=Dense(64)(L1)
+q2=Dense(64)(L1)
+q3=Dense(64)(L1)
+q4=Dense(64)(L1)
+k1=Dense(64)(L1)
+k2=Dense(64)(L1)
+k3=Dense(64)(L1)
+k4=Dense(64)(L1)
+v1=Dense(64)(L1)
+v2=Dense(64)(L1)
+v3=Dense(64)(L1)
+v4=Dense(64)(L1)
+a1=Attention()([q1,k1,v1])
+a2=Attention()([q2,k2,v2])
+a3=Attention()([q3,k3,v3])
+a4=Attention()([q4,k4,v4])
+C=Concatenate(axis=2)([a1,a2,a3,a4])
+C1=Dense(128)(C)
+C2=Dense(64)(C1)
+d10=Dense(64,activation='relu')(C2)
+d11=Dense(64,activation='relu')(d10)
+d15=Dense(64)(d11)
+A1=add([d15,Lq])
+d1=Conv1D(90,4,activation='relu',padding='same')(A1)
+d2=Conv1D(64,4,padding='same')(d1)
+D0=add([A1,d2])
+# x=Conv1DTranspose(kernel_size=4,strides=2,filters=32,padding='same')(D1)
+# x=Conv1D(32,3,activation='relu',padding='same')(x)
+
+x=Conv1DTranspose(kernel_size=4,strides=2,filters=32,padding='same')(D0)
+x=Concatenate()([x,c5])
+x=Conv1D(32,3,activation='relu',padding='same')(x)
+x=ca_block(x,32)
+x=Conv1DTranspose(kernel_size=4,strides=2,filters=32,padding='same')(x)
+x=Concatenate()([x,c4])
+x=Conv1D(32,3,activation='relu',padding='same')(x)
+x=ca_block(x,32)
+x=Conv1DTranspose(kernel_size=4,strides=2,filters=32,padding='same')(x)
+x=Concatenate()([x,c3])
+x=Conv1D(32,3,activation='relu',padding='same')(x)
+x=ca_block(x,32)
+x=Conv1DTranspose(kernel_size=4,strides=2,filters=32,padding='same')(x)
+x=Concatenate()([x,c2])
+x=Conv1D(32,3,activation='relu',padding='same')(x)
+x=ca_block(x,32)
+x=Conv1DTranspose(kernel_size=4,strides=2,filters=32,padding='same')(x)
+x=Concatenate()([x,c1])
+# ct7=Conv1DTranspose(kernel_size=6,strides=8,filters=32,padding='same')(c1)
+# print(ct7.shape)
+# a=Concatenate()([ct7, ct1])
+# print(a.shape)
+
+a=Conv1D(32,3,activation='relu',padding='same')(x)
+dd1=Dense(32,activation='relu')(a)
+DD3=Dense(16)(dd1)
+DD4=Dense(1)(DD3)
+o2=Conv1D(1,20,activation='sigmoid',padding='same')(DD4)
+model = tf.keras.Model(inputs=inputs, outputs=[o2])
+adam=Adam(learning_rate=0.0001)
+model.compile(loss=['binary_crossentropy'],optimizer=adam)
+from sklearn.model_selection import train_test_split
+X_train,X_test,y_train,y_test=train_test_split(X,y,test_size=0.1,random_state=1)
+# train=X[:1500,:,:]
+# train_labep=yp[:1500,:]
+# train_labes=ys[:1500,:]
+validat=[X_test,y_test]
+from tensorflow.keras.callbacks import ModelCheckpoint
+filepath = "weights-0-{epoch:02d}-{val_loss:.5f}.hdf5"
+checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True,mode='min')
+callbacks_list = [checkpoint]
+h=model.fit(X_train,y_train,batch_size=150,epochs=500,validation_data=validat,callbacks=callbacks_list)
